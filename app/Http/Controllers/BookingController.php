@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ClientBookingConfirmed;
+use App\Mail\ClientBookingCreated;
+use App\Mail\ClientBookingRejected;
+use App\Mail\OwnerBookingCreated;
 use App\Models\AppNotification;
 use App\Models\Booking;
 use App\Models\BridalPackage;
@@ -10,6 +14,8 @@ use App\Models\Service;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 
 class BookingController extends Controller
@@ -94,6 +100,12 @@ class BookingController extends Controller
                 'title' => 'Booking accepted',
                 'message' => "Your booking request at {$booking->saloon->name} has been accepted.",
             ]);
+
+            $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingConfirmed($booking)));
+        }
+
+        if ($booking->status === 'cancelled') {
+            $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingRejected($booking)));
         }
 
         return response()->json([
@@ -118,7 +130,7 @@ class BookingController extends Controller
             return $this->bookingConflictResponse($request, $saloon, $service->id);
         }
 
-        return DB::transaction(function () use ($request, $saloon, $service) {
+        $booking = DB::transaction(function () use ($request, $saloon, $service) {
             if ($this->hasBookingConflict($saloon->id, $request->booking_date, $request->start_time, $request->end_time)) {
                 return $this->bookingConflictResponse($request, $saloon, $service->id);
             }
@@ -137,8 +149,13 @@ class BookingController extends Controller
 
             $this->notifyOwner($booking, 'New service booking request', 'A client requested one of your saloon services.');
 
-            return response()->json($booking->load(['saloon.owner:id,name,email', 'service', 'notifications']), 201);
+            return $booking;
         });
+
+        $this->mailSafe(fn () => Mail::to($booking->saloon->owner->email)->send(new OwnerBookingCreated($booking)));
+        $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingCreated($booking)));
+
+        return response()->json($booking->load(['saloon.owner:id,name,email', 'service', 'notifications']), 201);
     }
 
     private function storePackageBooking(Request $request, Saloon $saloon)
@@ -157,7 +174,7 @@ class BookingController extends Controller
             return $this->bookingConflictResponse($request, $saloon, null);
         }
 
-        return DB::transaction(function () use ($request, $saloon, $package) {
+        $booking = DB::transaction(function () use ($request, $saloon, $package) {
             if ($this->hasBookingConflict($saloon->id, $request->booking_date, $request->start_time, $request->end_time)) {
                 return $this->bookingConflictResponse($request, $saloon, null);
             }
@@ -176,8 +193,13 @@ class BookingController extends Controller
 
             $this->notifyOwner($booking, 'New bridal package booking request', 'A client requested one of your bridal packages.');
 
-            return response()->json($booking->load(['saloon.owner:id,name,email', 'bridalPackage', 'notifications']), 201);
+            return $booking;
         });
+
+        $this->mailSafe(fn () => Mail::to($booking->saloon->owner->email)->send(new OwnerBookingCreated($booking)));
+        $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingCreated($booking)));
+
+        return response()->json($booking->load(['saloon.owner:id,name,email', 'bridalPackage', 'notifications']), 201);
     }
 
     private function notifyOwner(Booking $booking, string $title, string $message): void
@@ -188,6 +210,15 @@ class BookingController extends Controller
             'title' => $title,
             'message' => $message,
         ]);
+    }
+
+    private function mailSafe(callable $callback): void
+    {
+        try {
+            $callback();
+        } catch (\Throwable $e) {
+            Log::error('Failed to send booking email: '.$e->getMessage());
+        }
     }
 
     private function hasBookingConflict(int $saloonId, string $bookingDate, string $startTime, string $endTime): bool

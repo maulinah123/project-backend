@@ -8,9 +8,21 @@ use App\Http\Controllers\OwnerDashboardController;
 use App\Http\Controllers\PackageController;
 use App\Http\Controllers\SaloonController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Mail;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
+// testing email smtp route
+Route::get('/test-email', function () {
+    Mail::raw('This is a test email from my Laravel backend.', function ($message) {
+        $message->to('recipient@example.com')
+                ->subject('Laravel SMTP Test');
+    });
+
+    return 'Email sent successfully!';
+});
+
 
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -36,5 +48,5 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/saloon/bookings', [BookingController::class, 'saloonBookings']);
         Route::patch('/saloon/bookings/{id}/status', [BookingController::class, 'updateStatus']);
     });
-    
+
 });

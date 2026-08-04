@@ -30,6 +30,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/saloons/{id}', [SaloonController::class, 'show']);
 
     Route::middleware('role:client')->group(function () {
+        Route::get('/packages', [PackageController::class, 'index']);
         Route::post('/bookings', [BookingController::class, 'store']);
         Route::get('/my-bookings', [BookingController::class, 'myBookings']);
         Route::get('/client/dashboard', [ClientDashboardController::class, 'index']);

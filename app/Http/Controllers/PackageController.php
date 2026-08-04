@@ -8,6 +8,18 @@ use Illuminate\Http\Request;
 
 class PackageController extends Controller
 {
+    /**
+     * Return every bridal package, including the salon it belongs to.
+     */
+    public function index()
+    {
+        return response()->json(
+            BridalPackage::with('saloon:id,name,location,image')
+                ->latest()
+                ->get()
+        );
+    }
+
     public function store(Request $request)
     {
         $request->validate([

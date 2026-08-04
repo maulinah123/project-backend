@@ -101,11 +101,11 @@ class BookingController extends Controller
                 'message' => "Your booking request at {$booking->saloon->name} has been accepted.",
             ]);
 
-            $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingConfirmed($booking)));
+            $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingConfirmed($booking)), 'client-confirmed');
         }
 
         if ($booking->status === 'cancelled') {
-            $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingRejected($booking)));
+            $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingRejected($booking)), 'client-rejected');
         }
 
         return response()->json([
@@ -152,8 +152,8 @@ class BookingController extends Controller
             return $booking;
         });
 
-        $this->mailSafe(fn () => Mail::to($booking->saloon->owner->email)->send(new OwnerBookingCreated($booking)));
-        $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingCreated($booking)));
+        $this->mailSafe(fn () => Mail::to($booking->saloon->owner->email)->send(new OwnerBookingCreated($booking)), 'owner-created');
+        $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingCreated($booking)), 'client-created');
 
         return response()->json($booking->load(['saloon.owner:id,name,email', 'service', 'notifications']), 201);
     }
@@ -196,8 +196,8 @@ class BookingController extends Controller
             return $booking;
         });
 
-        $this->mailSafe(fn () => Mail::to($booking->saloon->owner->email)->send(new OwnerBookingCreated($booking)));
-        $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingCreated($booking)));
+        $this->mailSafe(fn () => Mail::to($booking->saloon->owner->email)->send(new OwnerBookingCreated($booking)), 'owner-created');
+        $this->mailSafe(fn () => Mail::to($booking->client->email)->send(new ClientBookingCreated($booking)), 'client-created');
 
         return response()->json($booking->load(['saloon.owner:id,name,email', 'bridalPackage', 'notifications']), 201);
     }
@@ -212,12 +212,14 @@ class BookingController extends Controller
         ]);
     }
 
-    private function mailSafe(callable $callback): void
+    private function mailSafe(callable $callback, string $context = ''): void
     {
         try {
             $callback();
         } catch (\Throwable $e) {
-            Log::error('Failed to send booking email: '.$e->getMessage());
+            Log::error('Failed to send booking email '.$context.': '.$e->getMessage(), [
+                'exception' => $e,
+            ]);
         }
     }
 
